@@ -1,86 +1,133 @@
 from flask import Flask, jsonify, request
+import sqlite3
+import bcrypt
 import logging
 
-# 1. Merkezi Uygulama Loglama Ayarlari
+# Loglama ayarları
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__)
+DB_NAME = "secure_app.db"
 
-# Gecici bellek ici veri yapisi
-items =[
-    {"id":1, "name": "Guvenlik Duvari Logu", "status": "Aktif"},
-    {"id":2, "name": "Ag Trafik Analizi", "status": "Inceleniyor"}
-]
-
-# 2. Merkezi Hata Yonetimi (Tum hatalari tek elden yakalayan yapi)
-@app.errorhandler(Exception)
-def handle_axception(e):
-    logging.error(f"Beklenmeyen bir hata olustu: {str(e)}")
-    return jsonify({"error": "Sunucu tarafinda kritik bir hata olustu.", "details": str(e)}), 500
-
-# CRUD Islemleri
-
-# Create (Yeni Veri Ekleme)
-@app.route('/api/items', methods=['POST'])
-def add_item():
-    data = request.get_json()
-    if not data or 'name' not in data:
-        return jsonify({"error": "Gecersiz veri! 'name' alani zorunludur."}), 400
-
-    new_item = {
-        "id": len(items) + 1 if items else 1,
-        "name": data['name'],
-        "status": data.get('status', 'Beklemede')
-    }
-    items.append(new_item)
-    logging.info(f"Yeni oge eklendi: ID {new_item['id']}")
-    return jsonify(new_item), 201
-
-# Read (Tum Verileri Listeleme)
-@app.route('/api/items', methods=['GET'])
-def get_items():
-    logging.info("Tüm veriler listelendi.")
-    return jsonify(items), 200
-
-# Update (Veri Guncelleme)
-@app.route('/api/items/<int:item_id>', methods=['PUT'])
-def update_item(item_id):
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Güncellenecek veri sağlanmadı!"}), 400
-        
-    target_item = None
-    for item in items:
-        if item['id'] == item_id:
-            target_item = item
-            break
-            
-    if not target_item:
-        return jsonify({"error": "Güncellenecek kayıt bulunamadı."}), 404
-        
-    target_item['name'] = data.get('name', target_item['name'])
-    target_item['status'] = data.get('status', target_item['status'])
+def init_db():
+    """Veritabanını ve gerekli tabloları otomatik kurar."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
     
-    logging.info(f"ID {item_id} numaralı kayıt güncellendi.")
-    return jsonify(target_item), 200
+    # Kullanıcılar Tablosu (Şifreler düz metin değil, hashlenmiş saklanır)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL
+        )
+    ''')
+    
+    # Görevler Tablosu
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            title TEXT NOT NULL,
+            status TEXT DEFAULT 'Bekliyor',
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-# Delete (Veri Silme)
-@app.route('/api/items/<int:item_id>', methods=['DELETE'])
-def delete_item(item_id):
-    global items
-    target_item = None
-    for item in items:
-        if item['id'] == item_id:
-            target_item = item
-            break
-            
-    if not target_item:
-        return jsonify({"error": "Silinecek kayıt bulunamadı."}), 404
+@app.errorhandler(Exception)
+def handle_exception(e):
+    logging.error(f"Kritik Hata: {str(e)}")
+    return jsonify({"error": "Sunucu tarafında bir hata oluştu."}), 500
+
+
+# --- 1. KULLANICI İŞLEMLERİ (Kayıt Ol & Giriş Yap) ---
+
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    if not data or 'username' not in data or 'password' not in data:
+        return jsonify({"error": "Kullanıcı adı ve şifre zorunludur."}), 400
         
-    items = [item for item in items if item['id'] != item_id]
-    logging.info(f"ID {item_id} numaralı kayıt silindi.")
-    return jsonify({"message": f"ID {item_id} başarıyla silindi."}), 200
+    username = data['username']
+    password = data['password'].encode('utf-8')
+    
+    # Güvenli Geliştirme: Şifreyi asla düz metin saklama, bcrypt ile hashle!
+    hashed_password = bcrypt.hashpw(password, bcrypt.gensalt())
+    
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
+        conn.commit()
+        conn.close()
+        logging.info(f"Yeni kullanıcı kaydedildi: {username}")
+        return jsonify({"message": f"Kullanıcı '{username}' başarıyla oluşturuldu."}), 201
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "Bu kullanıcı adı zaten alınmış."}), 400
+
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    if not data or 'username' not in data or 'password' not in data:
+        return jsonify({"error": "Kullanıcı adı ve şifre gereklidir."}), 400
+        
+    username = data['username']
+    password = data['password'].encode('utf-8')
+    
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+    user = cursor.fetchone()
+    conn.close()
+    
+    if user and bcrypt.checkpw(password, user['password']):
+        logging.info(f"Kullanıcı giriş yaptı: {username}")
+        return jsonify({"message": "Giriş başarılı!", "user_id": user['id']}), 200
+    else:
+        logging.warning(f"Başarısız giriş denemesi: {username}")
+        return jsonify({"error": "Geçersiz kullanıcı adı veya şifre."}), 401
+
+
+# --- 2. GÖREV (TASK) YÖNETİMİ ---
+
+@app.route('/api/tasks', methods=['POST'])
+def add_task():
+    data = request.get_json()
+    if not data or 'user_id' not in data or 'title' not in data:
+        return jsonify({"error": "user_id ve title alanları zorunludur."}), 400
+        
+    user_id = data['user_id']
+    title = data['title']
+    status = data.get('status', 'Bekliyor')
+    
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO tasks (user_id, title, status) VALUES (?, ?, ?)", (user_id, title, status))
+    conn.commit()
+    task_id = cursor.lastrowid
+    conn.close()
+    
+    logging.info(f"Yeni görev eklendi: ID {task_id}")
+    return jsonify({"id": task_id, "user_id": user_id, "title": title, "status": status}), 201
+
+
+@app.route('/api/tasks/<int:user_id>', methods=['GET'])
+def get_tasks(user_id):
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM tasks WHERE user_id = ?", (user_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    
+    tasks_list = [dict(row) for row in rows]
+    return jsonify(tasks_list), 200
 
 
 if __name__ == '__main__':
+    init_db()
     app.run(debug=True, port=5000)
