@@ -136,5 +136,165 @@ def admin_panel():
     finally:
         cursor.close()
         conn.close()
+
+# 5. Gorev olusturma endpoint'i
+@app.route('/api/tasks', methods=['POST'])
+@jwt_required()
+def create_task():
+    current_user = get_jwt_identity()
+    user_id = current_user.get('id') if isinstance(current_user, dict) else int(current_user)
+
+    data = request.get_json()
+    title = data.get('title')
+    description = data.get('description', '')
+
+    if not title:
+        return jsonify({"error": "Gorev basligi zorunludur!"}), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": " Veritabani baglanti hatasi!"}), 500
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO Tasks (user_id, title, description) VALUES (?, ?, ?)",
+            (user_id, title, description)
+        )
+
+        conn.commit()
+        return jsonify({"message": "Gorev basariyla olusturuldu!"}), 201
+
+    except Exception as e:
+        return jsonify({"error": "Veritabani baglanti hatasi!"}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+# 6.Gorevleri listeleme endpoint'i
+@app.route('/api/tasks', methods=['GET'])
+@jwt_required()
+def get_tasks():
+    current_user = get_jwt_identity()
+
+    if isinstance(current_user, dict):
+        user_id = current_user.get('id')
+        user_role = current_user.get('role')
+    else:
+        user_id = int(current_user)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT role FROM Users WHERE id = ?", (user_id,))
+        res = cursor.fetchone()
+        user_role = res[0] if res else 'user'
+        cursor.close()
+        conn.close()
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Veritabani baglanti hatasi!"}), 500
+
+    cursor = conn.cursor()
+    try:
+        if user_role == 'admin':
+            cursor.execute("SELECT id, user_id, title, description, status, created_at FROM Tasks")
+        else:
+            cursor.execute("SELECT id, user_id, title, description, status, created_at FROM Tasks WHERE user_id = ?", (user_id, ))
+
+        columns = [column[0] for column in cursor.description]
+        tasks = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        return jsonify({"tasks": tasks}), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Gorevler getirilmedi: {str(e)}"}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+# 7. Gorev guncelleme endpoint'i
+@app.route('/api/tasks/<int:task_id>', methods=['PUT'])
+@jwt_required()
+def update_task(task_id):
+    current_user_id = int(get_jwt_identity())
+    data = request.get_json()
+    
+    title = data.get('title')
+    description = data.get('description')
+    status = data.get('status')
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Veritabani baglanti hatasi!"}), 500
+
+    cursor = conn.cursor()
+    try:
+        # Gorevin var olup olmadigini ve bu kullaniciya ait olup olmadigini kontrol etme
+        cursor.execute("SELECT user_id FROM Tasks WHERE id = ?", (task_id,))
+        task = cursor.fetchone()
+
+        if not task:
+            return jsonify({"error": "Görev bulunamadı!"}), 404
+
+        # Eger istek atan kullanici gorevin sahibi degilse ve admin değilse islem yaptirmayalim
+        # Gorevin sahibi guncelleyebilsin mantigi kuralim:
+        if task[0] != current_user_id:
+            return jsonify({"error": "Bu görevi güncelleme yetkiniz yok!"}), 403
+
+        # Guncelleme sorgusu
+        cursor.execute("""
+            UPDATE Tasks 
+            SET title = COALESCE(?, title), 
+                description = COALESCE(?, description), 
+                status = COALESCE(?, status)
+            WHERE id = ?
+        """, (title, description, status, task_id))
+        
+        conn.commit()
+        return jsonify({"message": f"{task_id} ID'li görev başarıyla güncellendi!"}), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Güncelleme başarısız: {str(e)}"}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# 8. Gorev silme endpoint'i
+@app.route('/api/tasks/<int:task_id>', methods=['DELETE'])
+@jwt_required()
+def delete_task(task_id):
+    current_user_id = int(get_jwt_identity())
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Veritabani baglanti hatasi!"}), 500
+
+    cursor = conn.cursor()
+    try:
+        # Gorev ve sahibini kontrol etme
+        cursor.execute("SELECT user_id FROM Tasks WHERE id = ?", (task_id,))
+        task = cursor.fetchone()
+
+        if not task:
+            return jsonify({"error": "Gorev bulunamadi!"}), 404
+
+        # Sahip kontrolü
+        if task[0] != current_user_id:
+            return jsonify({"error": "Bu gorevi silme yetkiniz yok!"}), 403
+
+        # Görevi sil
+        cursor.execute("DELETE FROM Tasks WHERE id = ?", (task_id,))
+        conn.commit()
+        
+        return jsonify({"message": f"{task_id} ID'li görev basariyla silindi!"}), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Silme islemi basarisiz: {str(e)}"}), 500
+    finally:
+        cursor.close()
+        conn.close()
+        
 if __name__ == '__main__':
     app.run(debug=True)

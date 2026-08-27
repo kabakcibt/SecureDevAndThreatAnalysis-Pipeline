@@ -1,7 +1,7 @@
 import pyodbc
 
 def get_db_connection():
-    server = 'localhost\\SQLEXPRESS'  # Veya sadece 'localhost' eğer named instance değilse
+    server = 'localhost\\SQLEXPRESS'  
     database = 'SecureTaskManagerDB'
 
     connection_string = (
