@@ -7,6 +7,24 @@ app = Flask(__name__)
 app.config["JWT_SECRET_KEY"] = "cok-gizli-super-guvenli-anahtar-123"
 jwt = JWTManager(app)
 
+# YARDIMCI FONKSİYON: Kritik işlemleri AuditLogs tablosuna kaydetmek için
+def log_action(username, action, details):
+    conn = get_db_connection()
+    if conn:
+        cursor = conn.cursor()
+        try:
+            ip_address = request.remote_addr # İstek atan kişinin IP adresi
+            cursor.execute(
+                "INSERT INTO AuditLogs (username, action, ip_address, details) VALUES (?, ?, ?, ?)",
+                (username, action, ip_address, details)
+            )
+            conn.commit()
+        except Exception as e:
+            print(f"Loglama hatası: {str(e)}")
+        finally:
+            cursor.close()
+            conn.close()
+
 # 1. Kullanici kayit endpoint'i
 @app.route('/api/register', methods=['POST'])
 def register():
@@ -17,7 +35,6 @@ def register():
     if not username or not password:
         return jsonify({"error": "Kullanici adi ve sifre zorunludur!"}), 400
     
-    # sifreyi guvenli bir sekilde hashleme
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
     conn = get_db_connection()
@@ -32,16 +49,22 @@ def register():
             (username, hashed_password, 'user')
         )
         conn.commit()
-        return jsonify({"message": f"Kullanici '{username}' basariyla kaydedildi!"}), 201 # Created: Istek basarili ve sunucuda yeni kaynak olusturuldu.
+        
+        # AUDIT LOG: Başarılı kayıt loglanıyor
+        log_action(username, "REGISTER_SUCCESS", "Yeni kullanici basariyla kaydedildi.")
+        
+        return jsonify({"message": f"Kullanici '{username}' basariyla kaydedildi!"}), 201
     
     except Exception as e:
+        # AUDIT LOG: Başarısız kayıt denemesi loglanıyor
+        log_action(username, "REGISTER_FAIL", f"Kayit basarisiz: {str(e)}")
         return jsonify({"error": f"Kayit basarisiz (Kullanici adi kullanimda olabilir): {str(e)}"}), 400
 
     finally:
         cursor.close()
         conn.close()
 
-# 2.  Kullanici giris endpoint'i
+# 2. Kullanici giris endpoint'i
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -49,11 +72,11 @@ def login():
     password = data.get('password')
 
     if not username or not password:
-        return jsonify({"error": "Kullanici adi ve sifre zorunludur!"}), 400 # Bad request: hatali istek
+        return jsonify({"error": "Kullanici adi ve sifre zorunludur!"}), 400
     
     conn = get_db_connection()
     if not conn:
-        return jsonify({"error": "Veritabani baglanti hatasi!"}), 500 # Internal Server Error: Sunucu hatasi
+        return jsonify({"error": "Veritabani baglanti hatasi!"}), 500
 
     cursor = conn.cursor()
 
@@ -62,14 +85,18 @@ def login():
         user = cursor.fetchone()
 
         if not user:
-            return jsonify({"error": "Gecersiz kullanici adi ve ya sifre!"}), 401 # Unauthorized: Kimlik dogrulama hatasi.
+            # AUDIT LOG: Olmayan kullanici ile giris denemesi
+            log_action(username, "LOGIN_FAIL", "Geçersiz kullanici adi.")
+            return jsonify({"error": "Gecersiz kullanici adi veya sifre!"}), 401
 
         stored_hash = user[2].encode('utf-8')
         input_password = password.encode('utf-8')
 
-        if  bcrypt.checkpw(input_password, stored_hash):
-
+        if bcrypt.checkpw(input_password, stored_hash):
             access_token = create_access_token(identity=str(user[0]))
+
+            # AUDIT LOG: Başarılı giriş
+            log_action(username, "LOGIN_SUCCESS", "Kullanici sisteme giris yapti.")
 
             return jsonify({
                 "message": "Giris basarili!",
@@ -81,15 +108,18 @@ def login():
                 }
             }), 200
         else:
-            return jsonify({"error": "Gecersiz kullanici adi veya sifre!"}), 401 # Unauthorized: Kimlik dogrulama hatasi.
+            # AUDIT LOG: Yanlis sifre denemesi
+            log_action(username, "LOGIN_FAIL", "Sifre hatali.")
+            return jsonify({"error": "Gecersiz kullanici adi veya sifre!"}), 401
 
     except Exception as e:
-        return jsonify({"error": f"Giris sirasinda hata olustu: {str(e)}"}), 500 # Internal Server Error: Sunucu hatasi
+        return jsonify({"error": f"Giris sirasinda hata olustu: {str(e)}"}), 500
     
     finally:
         cursor.close()
         conn.close()
-# 3. Korumali dashboard endpoint'i (VIP bilet isteyen kapi)
+
+# 3. Korumali dashboard endpoint'i
 @app.route('/api/dashboard', methods=['GET'])
 @jwt_required()
 def dashboard():
@@ -98,9 +128,9 @@ def dashboard():
     return jsonify({
         "message": "Gizli dashboard sayfasina hosgeldiniz efendim!",
         "user_id": current_user_id
-    }), 200 # OK, Islem basarili
+    }), 200
 
-# 4. Adminlerin girebilecegi ozel panel (Kilitli kapi)
+# 4. Adminlerin girebilecegi ozel panel
 @app.route('/api/admin-panel', methods=['GET'])
 @jwt_required()
 def admin_panel():
@@ -108,30 +138,34 @@ def admin_panel():
 
     conn = get_db_connection()
     if not conn:
-        return jsonify({"error": "Veritabani baglanti hatasi!"}), 500 # Internal server error: Sunucu hatasi
+        return jsonify({"error": "Veritabani baglanti hatasi!"}), 500
 
     cursor = conn.cursor()
     try:
-        # Kullanicinin rolunu veritabanindan teyit ediyoruz.
-        cursor.execute("SELECT role FROM Users WHERE id = ?", (current_user_id,))
+        cursor.execute("SELECT username, role FROM Users WHERE id = ?", (current_user_id,))
         user = cursor.fetchone()
 
         if not user:
-            return jsonify({"error": "Kullanici bulunamadi!"}), 404 # Not Found: Kayit bulunamadi.
+            return jsonify({"error": "Kullanici bulunamadi!"}), 404
         
-        user_role = user[0]
+        username = user[0]
+        user_role = user[1]
 
-        # Rol kontrolu
         if user_role != 'admin':
-            return jsonify({"error": "Yetkisiz islem! Bu alana sadece adminler girebilir."}), 403 # Forbidden: Yetki hatasi.
+            # AUDIT LOG: Yetkisiz admin paneli erisim denemesi
+            log_action(username, "UNAUTHORIZED_ACCESS_ATTEMPT", "Normal kullanici admin paneline girmeye çalisti.")
+            return jsonify({"error": "Yetkisiz islem! Bu alana sadece adminler girebilir."}), 403
+
+        # AUDIT LOG: Basarili admin giris paneli
+        log_action(username, "ADMIN_PANEL_ACCESS", "Admin paneline erisildi.")
 
         return jsonify({
             "message": "Admin paneline hos geldiniz efendim, her sey kontrol altinda!",
             "role": user_role
-        }), 200 # OK: İslem basarisiz.
+        }), 200
 
     except Exception as e:
-        return jsonify({"error": f"Bir hata olustu: {str(e)}"}), 500 # Internal Server Error: Sunucu hatasi
+        return jsonify({"error": f"Bir hata olustu: {str(e)}"}), 500
 
     finally:
         cursor.close()
@@ -141,9 +175,7 @@ def admin_panel():
 @app.route('/api/tasks', methods=['POST'])
 @jwt_required()
 def create_task():
-    current_user = get_jwt_identity()
-    user_id = current_user.get('id') if isinstance(current_user, dict) else int(current_user)
-
+    current_user_id = int(get_jwt_identity())
     data = request.get_json()
     title = data.get('title')
     description = data.get('description', '')
@@ -153,43 +185,38 @@ def create_task():
 
     conn = get_db_connection()
     if not conn:
-        return jsonify({"error": " Veritabani baglanti hatasi!"}), 500
+        return jsonify({"error": "Veritabani baglanti hatasi!"}), 500
 
     cursor = conn.cursor()
     try:
+        # Loglama için kullanıcı adını bulalım
+        cursor.execute("SELECT username FROM Users WHERE id = ?", (current_user_id,))
+        user_res = cursor.fetchone()
+        username = user_res[0] if user_res else "Bilinmeyen"
+
         cursor.execute(
             "INSERT INTO Tasks (user_id, title, description) VALUES (?, ?, ?)",
-            (user_id, title, description)
+            (current_user_id, title, description)
         )
-
         conn.commit()
+
+        # AUDIT LOG: Görev oluşturuldu
+        log_action(username, "TASK_CREATE", f"'{title}' baslikli gorev olusturuldu.")
+
         return jsonify({"message": "Gorev basariyla olusturuldu!"}), 201
 
     except Exception as e:
-        return jsonify({"error": "Veritabani baglanti hatasi!"}), 500
+        return jsonify({"error": f"Veritabani hatasi: {str(e)}"}), 500
 
     finally:
         cursor.close()
         conn.close()
 
-# 6.Gorevleri listeleme endpoint'i
+# 6. Gorevleri listeleme endpoint'i
 @app.route('/api/tasks', methods=['GET'])
 @jwt_required()
 def get_tasks():
-    current_user = get_jwt_identity()
-
-    if isinstance(current_user, dict):
-        user_id = current_user.get('id')
-        user_role = current_user.get('role')
-    else:
-        user_id = int(current_user)
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT role FROM Users WHERE id = ?", (user_id,))
-        res = cursor.fetchone()
-        user_role = res[0] if res else 'user'
-        cursor.close()
-        conn.close()
+    current_user_id = int(get_jwt_identity())
 
     conn = get_db_connection()
     if not conn:
@@ -197,10 +224,17 @@ def get_tasks():
 
     cursor = conn.cursor()
     try:
+        # Kullanicinin rolunu ve adini öğrenme
+        cursor.execute("SELECT username, role FROM Users WHERE id = ?", (current_user_id,))
+        user_data = cursor.fetchone()
+        username = user_data[0]
+        user_role = user_data[1]
+
+        # Adminse tum gorevleri, normalse sadece kendi gorevlerini getirir
         if user_role == 'admin':
             cursor.execute("SELECT id, user_id, title, description, status, created_at FROM Tasks")
         else:
-            cursor.execute("SELECT id, user_id, title, description, status, created_at FROM Tasks WHERE user_id = ?", (user_id, ))
+            cursor.execute("SELECT id, user_id, title, description, status, created_at FROM Tasks WHERE user_id = ?", (current_user_id,))
 
         columns = [column[0] for column in cursor.description]
         tasks = [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -208,7 +242,7 @@ def get_tasks():
         return jsonify({"tasks": tasks}), 200
 
     except Exception as e:
-        return jsonify({"error": f"Gorevler getirilmedi: {str(e)}"}), 500
+        return jsonify({"error": f"Gorevler getirilemedi: {str(e)}"}), 500
 
     finally:
         cursor.close()
@@ -231,20 +265,28 @@ def update_task(task_id):
 
     cursor = conn.cursor()
     try:
-        # Gorevin var olup olmadigini ve bu kullaniciya ait olup olmadigini kontrol etme
+        # Islemi yapan kullanicinin rolunu ve adimi alma
+        cursor.execute("SELECT username, role FROM Users WHERE id = ?", (current_user_id,))
+        user_data = cursor.fetchone()
+        username = user_data[0]
+        user_role = user_data[1]
+
+        # Görevin sahibini öğrenme
         cursor.execute("SELECT user_id FROM Tasks WHERE id = ?", (task_id,))
         task = cursor.fetchone()
 
         if not task:
-            return jsonify({"error": "Görev bulunamadı!"}), 404
+            return jsonify({"error": "Gorev bulunamadi!"}), 404
 
-        # Eger istek atan kullanici gorevin sahibi degilse ve admin değilse islem yaptirmayalim
-        # Gorevin sahibi guncelleyebilsin mantigi kuralim:
-        if task[0] != current_user_id:
-            return jsonify({"error": "Bu görevi güncelleme yetkiniz yok!"}), 403
+        task_owner_id = task[0]
 
-        # Guncelleme sorgusu
-        cursor.execute("""
+        # YETKİ KONTROLÜ: Görevin sahibi değilse VE admin de değilse hata döndür
+        if task_owner_id != current_user_id and user_role != 'admin':
+            log_action(username, "UNAUTHORIZED_TASK_UPDATE", f"{task_id} ID'li gorevi guncelleme yetkisiz deneme.")
+            return jsonify({"error": "Bu gorevi guncelleme yetkiniz yok!"}), 403
+
+        cursor.execute(
+        """
             UPDATE Tasks 
             SET title = COALESCE(?, title), 
                 description = COALESCE(?, description), 
@@ -253,10 +295,14 @@ def update_task(task_id):
         """, (title, description, status, task_id))
         
         conn.commit()
-        return jsonify({"message": f"{task_id} ID'li görev başarıyla güncellendi!"}), 200
+
+        # AUDIT LOG: Gorev guncellendi
+        log_action(username, "TASK_UPDATE", f"{task_id} ID'li gorev guncellendi.")
+
+        return jsonify({"message": f"{task_id} ID'li gorev basariyla guncellendi!"}), 200
 
     except Exception as e:
-        return jsonify({"error": f"Güncelleme başarısız: {str(e)}"}), 500
+        return jsonify({"error": f"Guncelleme basarisiz: {str(e)}"}), 500
     finally:
         cursor.close()
         conn.close()
@@ -273,21 +319,30 @@ def delete_task(task_id):
 
     cursor = conn.cursor()
     try:
-        # Gorev ve sahibini kontrol etme
+        cursor.execute("SELECT username, role FROM Users WHERE id = ?", (current_user_id,))
+        user_data = cursor.fetchone()
+        username = user_data[0]
+        user_role = user_data[1]
+
         cursor.execute("SELECT user_id FROM Tasks WHERE id = ?", (task_id,))
         task = cursor.fetchone()
 
         if not task:
             return jsonify({"error": "Gorev bulunamadi!"}), 404
 
-        # Sahip kontrolü
-        if task[0] != current_user_id:
+        task_owner_id = task[0]
+
+        # YETKİ KONTROLÜ: Sahibi değilse ve admin değilse sildirme
+        if task_owner_id != current_user_id and user_role != 'admin':
+            log_action(username, "UNAUTHORIZED_TASK_DELETE", f"{task_id} ID'li görevi silme yetkisiz deneme.")
             return jsonify({"error": "Bu gorevi silme yetkiniz yok!"}), 403
 
-        # Görevi sil
         cursor.execute("DELETE FROM Tasks WHERE id = ?", (task_id,))
         conn.commit()
         
+        # AUDIT LOG: Görev silindi
+        log_action(username, "TASK_DELETE", f"{task_id} ID'li görev silindi.")
+
         return jsonify({"message": f"{task_id} ID'li görev basariyla silindi!"}), 200
 
     except Exception as e:
