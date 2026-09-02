@@ -4,14 +4,16 @@ FROM python:3.12-slim
 # Calisma dizinini belirleme
 WORKDIR /app
 
-# Gereksinim dosyasini kopyalama ve kütüphaneleri yükleme
+# Gerekli dosyalari konteynera kopyalama
 COPY requirements.txt .
+
+# Bagimliliklari yukleme
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Tüm kodlarimizi konteynirin icine kopyalama
+# Proje dosyalarinin tamamini kopyalama
 COPY . .
 
-# Flask'in calistigi 5000 portunu disariya acma
+# Flask uygulamasinin calisacagi portu belirtme
 EXPOSE 5000
 
 # Uygulamayı başlatma
