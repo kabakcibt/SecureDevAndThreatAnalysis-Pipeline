@@ -2,11 +2,11 @@ import email
 from email import policy
 import re
 
-def parse_eml_file(file_patch):
+def parse_eml_file(file_path):
     """
     Verilen .eml dosyasini okur, basliklari ve govdeyi ayristirir.
     """
-    with open(file_patch, 'rb') as f:
+    with open(file_path, 'rb') as f:
         msg = email.message_from_binary_file(f, policy = policy.default)
 
     # 1. Temel parser bilgileri
