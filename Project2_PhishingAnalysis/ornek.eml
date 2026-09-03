@@ -1,0 +1,13 @@
+From: "Bank Support" <guvenlik@banka-guvenlik-kontrol.com>
+Reply-To: "Saldırgan" <hackler@evil-server.com>
+Subject: ACIL: Hesabinizda Supheli Islem Tespit Edildi!
+Date: Thu, 3 Sep 2026 15:00:00 +0300
+Authentication-Results: mx.google.com;
+       spf=fail (google.com: domain of guvenlik@banka-guvenlik-kontrol.com designates 192.0.2.1 as permitted sender) reason=ipmismatch;
+       dkim=fail header.i=@banka-guvenlik-kontrol.com
+Content-Type: text/plain; charset="utf-8"
+
+Sayin Musterimiz, 
+Hesabinizda supheli bir hareket algilanmistir. Guvenliginiz icin lutfen hemen asagidaki baglantiya tiklayarak hesabinizi dogrulayin:
+https://www.banka-guvenlik-giris-yap.com/login?token=12345
+Destek ekibi iyi gunler diler.
