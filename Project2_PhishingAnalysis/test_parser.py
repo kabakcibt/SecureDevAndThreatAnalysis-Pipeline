@@ -24,6 +24,8 @@ print(f"SPF Durumu: {sec['spf_status']}")
 print(f"DKIM Durumu: {sec['dkim_status']}")
 
 print(f"\n--- AYIKLANAN URL'LER ({len(sonuc['extracted_urls'])} adet) ---")
+
 for url in sonuc['extracted_urls']:
     print(f" -> {url}")
+
 print("-----------------------------------")
