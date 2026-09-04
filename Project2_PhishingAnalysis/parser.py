@@ -1,6 +1,8 @@
 import email
 from email import policy
 import re
+from urllib.parse import urlparse
+import ipaddress
 
 def analyze_headers(msg):
     """
@@ -47,6 +49,43 @@ def analyze_headers(msg):
         "auth_header_raw": auth_results
     }
 
+def extract_and_analyze_urls(body_text):
+    """
+    E-posta govdesinden URL'leri ayiklar; domain, sema ve IP tespiti yapar.
+    """
+    url_pattern = r'https?://[^\s<>"]+|www\.[^\s<>"]+'
+    raw_urls = re.findall(url_pattern, body_text)
+
+    parsed_urls_data = []
+
+    for url in raw_urls:
+        if url.startswith('www.'):
+            full_url = 'http://' + url
+        else:
+            full_url = url
+
+        parsed_url = urlparse(full_url)
+        domain = parsed_url.netloc
+
+        if ':' in domain:
+            domain = domain.split(':')[0]
+
+        is_ip_address = False
+        try:
+            ipaddress.ip_address(domain)
+            is_ip_address = True
+        except ValueError:
+            is_ip_address = False
+
+        parsed_urls_data.append({
+            "original_url": url,
+            "domain": domain,
+            "scheme": parsed_url.scheme,
+            "is_ip_address": is_ip_address
+        })
+
+    return parsed_urls_data
+
 def parse_eml_file(file_path):
     """
     Verilen .eml dosyasini okur, basliklari ve govdeyi ayristirir.
@@ -79,7 +118,7 @@ def parse_eml_file(file_path):
             body = payload.decode('utf-8', errors = 'ignore')
 
     # 3. Icerisindeki URL'leri ayiklama (Regex ile)
-    urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', body)
+    analyzed_urls = extract_and_analyze_urls(body)
 
     # 4. Guvenlik ve header analizi fonksiyonu
     security_analysis = analyze_headers(msg)
@@ -88,5 +127,5 @@ def parse_eml_file(file_path):
         "metadata": metadata,
         "security_analysis": security_analysis,
         "body_length": len(body),
-        "extracted_urls": list(set(urls)) # Benzersiz URL'ler
+        "extracted_urls": analyzed_urls # Burada düz string listesi yerine fonksiyonun ürettiği analyzed_urls olmalı!
     }
