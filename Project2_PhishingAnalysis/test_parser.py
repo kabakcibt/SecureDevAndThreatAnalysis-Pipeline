@@ -31,6 +31,27 @@ for item in sonuc['extracted_urls']:
     print(f"    IP mi?      : {item['is_ip_address']}")
     print("-" * 30)
 
+print("\n--- EK DOSYA (ATTACHMENT) ANALIZ SONUCLARI ---")
+if sonuc.get('extracted_attachments'):
+    for att in sonuc['extracted_attachments']:
+        print(f" -> Dosya Adi   : {att['filename']}")
+        print(f"    Boyut       : {att['size_bytes']} bytes")
+        print(f"    MIME Tipi   : {att['mime_type']}")
+        print(f"    MD5         : {att['md5']}")
+        print(f"    SHA256      : {att['sha256']}")
+        print("-" * 30)
+else:
+    print(" -> Bu e-postada herhangi bir ek dosya (attachment) bulunmadi.")
+
+print("\n--- RISK ANALİZİ VE PUANLAMA ---")
+risk_info = sonuc.get('risk_assessment', {})
+print(f" -> Toplam Risk Puani: {risk_info.get('total_score', 0)} / 100")
+print(f" -> Risk Seviyesi : {risk_info.get('risk_level', 'Bilinmiyor')}")
+print(f" -> Tespit Edlien Risk Faktorleri:")
+for factors in risk_info.get('risk_factors', []):
+    print(f"    *{factors}")
+print("-" * 30)
+
 print(f"\n--- AYIKLANAN URL'LER ({len(sonuc['extracted_urls'])} adet) ---")
 
 for url in sonuc['extracted_urls']:
