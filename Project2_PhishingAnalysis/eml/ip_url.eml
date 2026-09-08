@@ -1,0 +1,9 @@
+From: hr@internal-corp.com
+To: user@example.com
+Subject: Yeni Sirket Politika Belgesi
+Date: Tue, 8 Sep 2026 11:20:00 +0300
+Authentication-Results: mx.google.com; spf=pass dkim=pass
+Content-Type: text/plain; charset="utf-8"
+
+Lutfen yeni politika belgesini sunucumuzdan indirin:
+http://192.168.1.150/docs/policy.pdf

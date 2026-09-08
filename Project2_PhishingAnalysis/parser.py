@@ -1,18 +1,15 @@
 import email
 from email import policy
-from fileinput import filename
 import re
 from urllib.parse import urlparse
 import ipaddress
 import hashlib
 
 def analyze_headers(msg):
-
-
     """
     E-posta basliklarini guvenlik acisindan inceler:
     1. From ve Reply-To uyusmazligini kontrol eder.
-    2. SPF / DKIM bulgularini basliklar uzerinden arar.
+    2. SPF, DKIM ve DMARC bulgularini basliklar uzerinden arar.
     """
     from_header = msg.get('From', '')
     reply_to_header = msg.get('Reply-To', '')
@@ -28,11 +25,12 @@ def analyze_headers(msg):
     if clean_reply_to and clean_from.lower() != clean_reply_to.lower():
         mismatch_detected = True
 
-    # 2. SPF / DKIM durumlarini headerlardan okuma
+    # 2. SPF / DKIM / DMARC durumlarini headerlardan okuma
     auth_results = msg.get('Authentication-Results', '')
 
     spf_status = "Unknown"
     dkim_status = "Unknown"
+    dmarc_status = "Unknown"
 
     if "spf=pass" in auth_results.lower():
         spf_status = "Pass"
@@ -44,27 +42,31 @@ def analyze_headers(msg):
     elif "dkim=fail" in auth_results.lower():
         dkim_status = "Fail"
 
+    if "dmarc=pass" in auth_results.lower():
+        dmarc_status = "Pass"
+    elif "dmarc=fail" in auth_results.lower() or "dmarc=permerror" in auth_results.lower() or "dmarc=temperror" in auth_results.lower():
+        dmarc_status = "Fail"
+
     return {
         "from_address": clean_from,
         "reply_to_address": clean_reply_to,
         "reply_to_mismatch": mismatch_detected,
         "spf_status": spf_status,
         "dkim_status": dkim_status,
+        "dmarc_status": dmarc_status,
         "auth_header_raw": auth_results
     }
 
 def extract_and_analyze_attachments(msg):
     """
-    E-posta icindeki  ekleri guvenli bir sekilde tarar.
+    E-posta icindeki ekleri guvenli bir sekilde tarar.
     dosyalari calistirmadan statik analiz yapar; boyut, MIME tipi ve hash (MD5 / SHA256) uretir.
     """
     attachments_data = []
 
     for part in msg.walk():
-        # E-posta icindeki her bir parcanin disposition degerine bakiyoruz.
         content_disposition = part.get("Content-Disposition", "")
 
-        # Eger parca bir ek iceriyorsa veya filename belirtilmisse
         if "attachment" in content_disposition.lower() or part.get_filename():
             filename = part.get_filename()
             if filename:
@@ -73,7 +75,6 @@ def extract_and_analyze_attachments(msg):
                      file_size = len(payload)
                      mime_type = part.get_content_type()
 
-                     # Guvenli statik analiz: MD5 ve SHA-256 Hash hesaplama
                      md5_hash = hashlib.md5(payload).hexdigest()
                      sha256_hash = hashlib.sha256(payload).hexdigest()
 
@@ -86,7 +87,6 @@ def extract_and_analyze_attachments(msg):
                      })
 
     return attachments_data
-
 
 def calculate_risk_score(security_analysis, urls, attachments):
     """
@@ -108,6 +108,10 @@ def calculate_risk_score(security_analysis, urls, attachments):
         score += 15
         reasons.append("DKIM imzasi basarisiz (+ 15p)")
 
+    if security_analysis.get("dmarc_status") == "Fail":
+        score += 15
+        reasons.append("DMARC dogrulamasi basarisiz (+ 15p)")
+
     # 2. URL ve Domain Kontrolleri
     for url in urls:
         if url.get("is_ip_address"):
@@ -116,14 +120,13 @@ def calculate_risk_score(security_analysis, urls, attachments):
 
     if len(urls) > 1:
         score += 10
-        reasons.append(f"E-posta icinde coktu URL tespiti (Toplam: {len(urls)}) (+ 10p)")
+        reasons.append(f"E-posta icinde coklu URL tespiti (Toplam: {len(urls)}) (+ 10p)")
 
     # 3. Ek dosya (attachments) kontrolleri
     if attachments:
         score += 15
         reasons.append("E-postada ek dosya (attachment) tespit edildi (+ 15p)")
 
-        # Supheli uzanti kontrolu
         dangerous_extensions = ('.exe', '.bat', '.scr', '.pif', '.cmd', '.vbs', '.js', '.ps1')
         for att in attachments:
             filename_lower = att['filename'].lower()
@@ -133,11 +136,13 @@ def calculate_risk_score(security_analysis, urls, attachments):
 
     # 4. Risk seviyesi siniflandirmasi
     if score >= 60:
-        risk_level = "Yuksek Risk (Phishing Tehdidi)"
-    elif score > 0:
+        risk_level = "Yuksek Risk (Kritik Phishing Tehdidi)"
+    elif score >= 30:
         risk_level = "Orta Risk (Supheli Aktivite)"
+    elif score > 0:
+        risk_level = "Dusuk Risk (Hafif Supheli)"
     else:
-        risk_level = "Dusuk Risk (Temiz)"
+        risk_level = "Temiz (Risk Yok)"
 
     return {
         "total_score": score,
@@ -189,7 +194,6 @@ def parse_eml_file(file_path):
     with open(file_path, 'rb') as f:
         msg = email.message_from_binary_file(f, policy = policy.default)
 
-    # 1. Temel parser bilgileri
     metadata = {
         "from": msg.get('From', ''),
         "reply-to": msg.get('Reply-To', ''),
@@ -197,11 +201,9 @@ def parse_eml_file(file_path):
         "date": msg.get('Date', '')
     }
 
-    # 2. E-Posta govdesini guvenli cekme
     body = ""
     if msg.is_multipart():
         for part in msg.walk():
-            # Duz metin (text/plain) veya HTML okuma
             content_type = part.get_content_type()
             if content_type in ["text/plain", "text/html"]:
                 payload = part.get_payload(decode = True)
@@ -213,16 +215,9 @@ def parse_eml_file(file_path):
         if payload:
             body = payload.decode('utf-8', errors = 'ignore')
 
-    # 3. Icerisindeki URL'leri ayiklama (Regex ile)
     analyzed_urls = extract_and_analyze_urls(body)
-
-    # 4. Guvenlik ve header analizi fonksiyonu
     security_analysis = analyze_headers(msg)
-
-    # 5. Ek dosya analizi
     analyzed_attachments = extract_and_analyze_attachments(msg)
-
-    # 6. Risk puanlama motoru
     risk_assessment = calculate_risk_score(security_analysis, analyzed_urls, analyzed_attachments)
 
     return {

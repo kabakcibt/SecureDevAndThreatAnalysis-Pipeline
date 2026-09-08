@@ -1,10 +1,12 @@
 from parser import parse_eml_file
 
 # Olusturdugumuz test eml dosyasinin yolunu veriyoruz
-dosya_yolu = "ornek.eml"
+dosya_yolu = "eml/high_risk_combo.eml"
 
 print("*** E-posta analizi baslatiliyor...")
 sonuc = parse_eml_file(dosya_yolu)
+
+#------------------------------------------------------------------------------
 
 # Sonuclari ekrana yazdirma
 print("\n--- PARSER SONUCLARI ---")
@@ -14,6 +16,8 @@ print(f"Yanitla (Reply-To): {sonuc['metadata']['reply-to']}")
 print(f"Konu (Subject): {sonuc['metadata']['subject']}")
 print(f"Tarih (Date): {sonuc['metadata']['date']}")
 
+#------------------------------------------------------------------------------
+
 print("\n--- GUVENLIK ANALIZI (Header Check) ---")
 
 sec = sonuc['security_analysis']
@@ -22,6 +26,9 @@ print(f"Temizlenmis Reply-To: {sec['reply_to_address']}")
 print(f"Reply-To uyusmazligi var mi?: {sec['reply_to_mismatch']}")
 print(f"SPF Durumu: {sec['spf_status']}")
 print(f"DKIM Durumu: {sec['dkim_status']}")
+print(f"DMARC Durumu: {sec['dmarc_status']}")
+
+#------------------------------------------------------------------------------
 
 print("\n--- URL VE DOMAIN ANALIZ SONUCLARI")
 for item in sonuc['extracted_urls']:
@@ -30,6 +37,8 @@ for item in sonuc['extracted_urls']:
     print(f"    Sema        : {item['scheme']}")
     print(f"    IP mi?      : {item['is_ip_address']}")
     print("-" * 30)
+
+#------------------------------------------------------------------------------
 
 print("\n--- EK DOSYA (ATTACHMENT) ANALIZ SONUCLARI ---")
 if sonuc.get('extracted_attachments'):
@@ -43,6 +52,8 @@ if sonuc.get('extracted_attachments'):
 else:
     print(" -> Bu e-postada herhangi bir ek dosya (attachment) bulunmadi.")
 
+#------------------------------------------------------------------------------
+
 print("\n--- RISK ANALİZİ VE PUANLAMA ---")
 risk_info = sonuc.get('risk_assessment', {})
 print(f" -> Toplam Risk Puani: {risk_info.get('total_score', 0)} / 100")
@@ -51,6 +62,8 @@ print(f" -> Tespit Edlien Risk Faktorleri:")
 for factors in risk_info.get('risk_factors', []):
     print(f"    *{factors}")
 print("-" * 30)
+
+#------------------------------------------------------------------------------
 
 print(f"\n--- AYIKLANAN URL'LER ({len(sonuc['extracted_urls'])} adet) ---")
 

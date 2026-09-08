@@ -1,0 +1,8 @@
+From: support@github.com
+To: user@example.com
+Subject: Guvenlik Bildirimi: Basarili Giris
+Date: Tue, 8 Sep 2026 11:00:00 +0300
+Authentication-Results: mx.google.com; spf=pass dkim=pass dmarc=pass
+Content-Type: text/plain; charset="utf-8"
+
+Merhaba, hesabiniza yeni bir tarayicidan giris yapildi. Bu sizseniz herhangi bir islem yapmaniza gerek yoktur. Detaylar: https://github.com/settings/security

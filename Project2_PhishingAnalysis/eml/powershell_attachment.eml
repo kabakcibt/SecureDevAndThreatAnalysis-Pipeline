@@ -1,0 +1,19 @@
+From: sysadmin@it-support-desk.com
+To: user@example.com
+Subject: Acil Sistem Bakim Scripti
+Date: Tue, 8 Sep 2026 11:50:00 +0300
+Authentication-Results: mx.google.com; spf=fail dkim=fail dmarc=fail
+Content-Type: multipart/mixed; boundary="BOUNDARY888"
+
+--BOUNDARY888
+Content-Type: text/plain; charset="utf-8"
+
+Lutfen ekteki bakim scriptini calistirin.
+
+--BOUNDARY888
+Content-Type: application/octet-stream; name="update_script.ps1"
+Content-Disposition: attachment; filename="update_script.ps1"
+Content-Transfer-Encoding: base64
+
+V3JpdGUtSG9zdCAiSGVsbG8gV29ybGQi
+--BOUNDARY888--

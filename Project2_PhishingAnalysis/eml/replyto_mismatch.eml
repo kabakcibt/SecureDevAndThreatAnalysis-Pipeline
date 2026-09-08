@@ -1,0 +1,9 @@
+From: admin@microsoft.com
+Reply-To: attacker@phishing-dropzone.ru
+To: user@example.com
+Subject: Office 365 Sifre Sifirlama Gerekli
+Date: Tue, 8 Sep 2026 11:10:00 +0300
+Authentication-Results: mx.google.com; spf=fail dkim=fail dmarc=fail
+Content-Type: text/plain; charset="utf-8"
+
+Sifrenizin suresi doldu. Guncellemek icin tiklayin: http://office365-login-verify.com/reset

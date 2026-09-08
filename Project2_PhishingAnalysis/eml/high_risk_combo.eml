@@ -1,0 +1,23 @@
+From: security-alert@bank-express.com
+Reply-To: darkweb-collector@evil-server.net
+To: user@example.com
+Subject: KRITIK: Hesabiniz Bloke Edildi!
+Date: Tue, 8 Sep 2026 12:00:00 +0300
+Authentication-Results: mx.google.com; spf=fail dkim=fail dmarc=fail
+Content-Type: multipart/mixed; boundary="BOUNDARY777"
+
+--BOUNDARY777
+Content-Type: text/plain; charset="utf-8"
+
+Hesabiniz supheli etkinlik nedeniyle bloke edilmistir. Kilidi kaldirmak icin ekteki araci kullanin veya linke tiklayin:
+http://10.0.99.50/unlock
+http://fake-bank-auth.com/login
+
+--BOUNDARY777
+Content-Type: application/x-msdownload; name="unlock_tool.bat"
+Content-Disposition: attachment; filename="unlock_tool.bat"
+Content-Transfer-Encoding: base64
+
+Qecho off
+echo Hacked!
+--BOUNDARY777--
