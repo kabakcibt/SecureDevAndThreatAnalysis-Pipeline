@@ -13,4 +13,4 @@
 * **Python** (Veri analizi, log isleme ve otomasyon)
 * **SQL** (Veritabanı yonetimi ve sorgulama)
 * **C#/C++** (Altyapi ve sistem bileşsnleri)
-* **Cisco Packet Tracer** (Ag simulasyonu ve guvenligi)
+* **Postman** (API testleri)
