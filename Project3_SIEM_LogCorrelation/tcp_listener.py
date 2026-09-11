@@ -14,7 +14,7 @@ def handle_client(conn, addr):
             if not data:
                 break
 
-            raw_log = data.decode('utf-8', erros='ignore').strip()
+            raw_log = data.decode('utf-8', errors='ignore').strip()
             if not raw_log:
                 continue
 
@@ -29,7 +29,7 @@ def handle_client(conn, addr):
             if parsed_log:
                 parsed_log.setdefault("proto", "TCP")
                 parsed_log.setdefault("src", addr[0])
-                parsed_log.setdaut("spt", str(addr[1]))
+                parsed_log.setdefault("spt", str(addr[1]))
 
                 save_to_db(raw_log, parsed_log)
             else:
@@ -49,7 +49,7 @@ def start_tcp_listener():
     try:
         server.bind((HOST, PORT))
         server.listen(5)
-        print(f"[+] TCP Listener aktif ve guvenli modda! {HOST}:{PORT} dinleniyor.")
+        print(f"[+] TCP Listener aktif! {HOST}:{PORT} dinleniyor.")
 
         while True:
             conn, addr = server.accept()

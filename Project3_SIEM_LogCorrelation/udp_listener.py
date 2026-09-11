@@ -9,7 +9,7 @@ def start_udp_listener():
 
     try:
         sock.bind((HOST, PORT))
-        print(f"[+] UDP Listener aktif ve guvenli modda! {HOST}:{PORT} dinleniyor.")
+        print(f"[+] UDP Listener aktif! {HOST}:{PORT} dinleniyor.")
 
         while True:
             try:

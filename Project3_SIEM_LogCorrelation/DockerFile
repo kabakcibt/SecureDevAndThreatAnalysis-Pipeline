@@ -1,0 +1,27 @@
+# Python taban imajini yukleme
+FROM python:3.12-slim
+
+# Calisma dizinini belirleme
+WORKDIR /app
+
+# Sistem bagimliliklari ve ODBC surucusu icin gerekli paketler
+RUN apt-get update && apt-get install -y \
+    curl \
+    gnupg2 \
+    unixodbc \
+    unixodbc-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Gerekli Python kutuphanelerini yukleme
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Proje dosyalarini container icine kopyalama
+COPY . .
+
+# Streamlit ve SIEM portlarini disariya acma
+# 8501: Streamlit Arayüz, 514: UDP Listener, 9998: TCP Listener (Portlar)
+EXPOSE 8501 514/udp 9998
+
+# Varsayilan olarak Streamlit arayuzunu baslatma
+CMD ["streamlit", "run", "app.py", "--server.address=0.0.0.0"]

@@ -2,8 +2,8 @@ import pyodbc
 import time
 from datetime import datetime, timedelta
 
-#MSSQL Baglanti Bilgileri
-DB_CONFİG = (
+# MSSQL Baglanti Bilgileri
+DB_CONFIG = (
     "Driver={SQL Server};"
     "Server=localhost\\SQLEXPRESS;"
     "Database=SIEM_DB;"
@@ -12,7 +12,7 @@ DB_CONFİG = (
 
 def get_db_connection():
     try:
-        return pyodbc.connect(DB_CONFİG)
+        return pyodbc.connect(DB_CONFIG)
     except Exception as e:
         print(f"[-] Veritabani baglanti hatasi: {e}")
         return None
@@ -26,14 +26,13 @@ def check_rules():
 
     # Zaman Filtresi: Son 5 Dakika
     five_minutes_ago = datetime.now() - timedelta(minutes=5)
-    one_minute_ago = datetime.now() -timedelta(minutes=1)
+    one_minute_ago = datetime.now() - timedelta(minutes=1)
 
     query = """
         SELECT SourceAddress, RawLog, LogDate 
         FROM Logs 
         WHERE LogDate >= ?
     """
-
     cursor.execute(query, (five_minutes_ago,))
     rows = cursor.fetchall()
 
@@ -42,19 +41,19 @@ def check_rules():
     for row in rows:
         raw_ip = row.SourceAddress if row.SourceAddress else "127.0.0.1"
         clean_ip = raw_ip.split(':')[0].strip()
-
+        
         raw_log = str(row.RawLog) if row.RawLog else ""
         raw_log_lower = raw_log.lower()
 
-        # Kural 1: Son 5 dakika da 10 ve üzeri başarısız giriş (Brute Force)
-        if 'failed login' in raw_log_lower or "outcome=failure" in raw_log_lower or "failed" in raw_log_lower or "4625" in raw_log_lower:
+        # KURAL 1: Brute Force Tespiti
+        if "failed login" in raw_log_lower or "outcome=failure" in raw_log_lower or "failed" in raw_log_lower or "4625" in raw_log_lower:
             if row.LogDate >= five_minutes_ago:
                 failed_attempts[clean_ip] = failed_attempts.get(clean_ip, 0) + 1
 
-        # Kural 2: CEF Logu ve Kritik Olay Tespiti
+        # KURAL 2: Yüksek Önem Seviyeli Log Tespiti
         if "critical" in raw_log_lower or "severity=7" in raw_log_lower or "severity=8" in raw_log_lower or "severity=9" in raw_log_lower or "severity=10" in raw_log_lower:
             rule2_name = "High Severity / Critical CEF Log Detected"
-            rule2_desc = f"Kritik onem seviyesinde log tespit edildi: {raw_log[:60]}"
+            rule2_desc = f"Kritik önem seviyesinde log tespit edildi: {raw_log[:60]}"
             
             cursor.execute("""
                 SELECT COUNT(*) FROM Alarms 
@@ -69,19 +68,21 @@ def check_rules():
                 conn.commit()
                 print(f"\n[!] ALARM: {clean_ip} kaynakli yuksek riskli log yakalandi!")
 
+    # KURAL 1 EŞİK KONTROLÜ
     for ip, count in failed_attempts.items():
         if count >= 10:
             rule1_name = "Brute Force Attack Detected (Threshold: 10/5m)"
-            rule1_desc = f"Son 5 dakika icinde {ip} adresinden {count} adet basarisiz islem tespit edildi."
+            rule1_desc = f"Son 5 dakika icinde {ip} adresinden {count} adet basarisiz islem/giris denemesi tespit edildi."
 
             cursor.execute("""
                 SELECT COUNT(*) FROM Alarms 
                 WHERE SourceIP = ? AND RuleName = ? AND CreatedDate >= ?
             """, (ip, rule1_name, five_minutes_ago))
-
+            
             if cursor.fetchone()[0] == 0:
                 cursor.execute("""
                     INSERT INTO Alarms (RuleName, Description, SourceIP, CreatedDate)
+                    VALUES (?, ?, ?, GETDATE())
                 """, (rule1_name, rule1_desc, ip))
                 conn.commit()
                 print(f"\n[!] ALARM: {ip} -> Son 5 dakikada {count} Basarisiz Giris!")
@@ -89,13 +90,13 @@ def check_rules():
     conn.close()
 
 def run_engine():
-    print("[+] Korelasyon Motoru baslatildi. Kurallar taraniyor...")
+    print("[+] Korelasyon Motoru Baslatildi. Kurallar taraniyor...")
     while True:
         try:
             check_rules()
             time.sleep(3)
         except KeyboardInterrupt:
-            print("\n[-] Motor durduruldu.")
+            print("\n[-] Motor Durduruldu.")
             break
         except Exception as e:
             print(f"[-] Hata: {e}")
