@@ -11,6 +11,13 @@ Bu proje, SOC (Guvenlik Operasyon Merkezi) analistlerinin supheli e-postalari hi
 - **Aciklanabilir Risk Puanlama:** Tespit edilen her anomaliye gore 0-100 arasi agirlikli bir skor ve risk seviyesi uretir.
 - **Arayuz & Disa Aktarma:** Streamlit tabanli kart yapili arayuz sunar ve raporlarin **JSON** formatinda disa aktarilmasina olanak tanir.
 
+## 💻 Kullanılan Teknolojiler
+- **Dil & Altyapı:** Python, Streamlit (Arayüz)
+- **E-Posta Analizi:** `email`, `mailparser` (Header ve gövde ayrıştırma)
+- **Güvenlik & Kriptografi:** `hashlib` (MD5 ve SHA256 parmak izi hesaplama)
+- **Veri İşleme:** `pandas` (Risk tablolama ve veri yönetimi)
+- **Format & Çıktı:** JSON
+
 ## 🛠️ Kurulum ve Calistirma
 
 1. Gerekli kutuphaneyi yukleyin:
@@ -19,7 +26,7 @@ Bu proje, SOC (Guvenlik Operasyon Merkezi) analistlerinin supheli e-postalari hi
 
 2. Proje klasorune girin:
    ```bash
-   cd Project2_PhishinAnalysis
+   cd Project2_PhishingAnalysis
 
 3. Arayuzu baslatin:
    ```bash
