@@ -5,11 +5,11 @@ import bcrypt
 from db import get_db_connection
 
 app = Flask(__name__)
-# Güvenlik İyileştirmesi: Secret key ortam değişkeninden alınır, yoksa fallback kullanılır
+# Güvenlik İyileştirmesi: Secret key ortam değişkeninden alınır, yoksa fallback kullanma
 app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "cok-gizli-super-guvenli-anahtar-123")
 jwt = JWTManager(app)
 
-# YARDIMCI FONKSİYON: Kritik işlemleri AuditLogs tablosuna kaydetmek için
+# YARDIMCI FONKSİYON: Kritik islemleri AuditLogs tablosuna kaydetmek icin
 def log_action(username, action, details):
     conn = get_db_connection()
     if conn:
@@ -22,12 +22,12 @@ def log_action(username, action, details):
             )
             conn.commit()
         except Exception as e:
-            print(f"Loglama hatası: {str(e)}")
+            print(f"Loglama hatasi: {str(e)}")
         finally:
             cursor.close()
             conn.close()
 
-# YARDIMCI FONKSİYON: Tekrar eden kullanıcı ve rol sorgularını tek merkeze toplar
+# YARDIMCI FONKSİYON: Tekrar eden kullanici ve rol sorgularini tek merkeze toplama
 def get_user_by_id(user_id):
     conn = get_db_connection()
     if not conn:
