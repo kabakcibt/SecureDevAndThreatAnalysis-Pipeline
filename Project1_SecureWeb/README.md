@@ -14,11 +14,17 @@ Bu proje, güvenli web uygulaması geliştirme prensipleri (Secure Coding) dikka
 - **Güvenlik:** PyJWT, bcrypt
 - **Test Araçları:** Postman
 
-## 📂 Proje Yapısı
-```text
-project1/
-│
-│── app.py                 # Ana Flask uygulama ve rota dosyaları
-│── requirements.txt       # Proje bağımlılıkları
-│── README.md              # Proje dokümantasyonu
+## 🛠️ Kurulum ve Calistirma
+
+1. Gerekli kutuphaneyi yukleyin:
+   ```bash
+   pip install -r requirements.txt
+
+2. Proje klasorune girin:
+   ```bash
+   cd Project1_SecureWeb
+
+3. Sistemi baslatin:
+   ```bash
+   python app.py
 
